@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/hashicorp-demoapp/hashicups-client-go"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -65,6 +66,16 @@ func (r resourceOrderType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diag
 								Type:     types.StringType,
 								Computed: true,
 							},
+							"ingredients": {
+								Type: types.ListType{
+									ElemType: types.ObjectType{
+										AttrTypes: map[string]attr.Type{
+											"ingredient_id": types.NumberType,
+										},
+									},
+								},
+								Computed: true,
+							},
 						}),
 					},
 				}, tfsdk.ListNestedAttributesOptions{}),
@@ -89,7 +100,7 @@ func (r resourceOrder) Create(ctx context.Context, req tfsdk.CreateResourceReque
 	if !r.p.configured {
 		resp.Diagnostics.AddError(
 			"Provider not configured",
-			"The provider hasn't been configured before apply, likely because it depends on an unknown value from another resource. This leads to weird stuff happening, so we'd prefer if you didn't do that. Thanks!",
+			"The provider hasn't been configured before apply, likely because it depends on an unknown value from another resource.",
 		)
 		return
 	}
@@ -126,6 +137,13 @@ func (r resourceOrder) Create(ctx context.Context, req tfsdk.CreateResourceReque
 	// Map response body to resource schema attribute
 	var ois []OrderItem
 	for _, oi := range order.Items {
+		ingredients := []Ingredient{}
+		for _, ingredient := range oi.Coffee.Ingredient {
+			ingredients = append(ingredients, Ingredient{
+				ID: ingredient.ID,
+			})
+		}
+
 		ois = append(ois, OrderItem{
 			Coffee: Coffee{
 				ID:          oi.Coffee.ID,
@@ -134,9 +152,11 @@ func (r resourceOrder) Create(ctx context.Context, req tfsdk.CreateResourceReque
 				Description: types.String{Value: oi.Coffee.Description},
 				Price:       types.Number{Value: big.NewFloat(oi.Coffee.Price)},
 				Image:       types.String{Value: oi.Coffee.Image},
+				Ingredients: ingredients,
 			},
 			Quantity: oi.Quantity,
 		})
+
 	}
 
 	// Generate resource state struct
@@ -179,6 +199,14 @@ func (r resourceOrder) Read(ctx context.Context, req tfsdk.ReadResourceRequest, 
 	// Map response body to resource schema attribute
 	state.Items = []OrderItem{}
 	for _, item := range order.Items {
+
+		ingredients := []Ingredient{}
+		for _, ingredient := range item.Coffee.Ingredient {
+			ingredients = append(ingredients, Ingredient{
+				ID: ingredient.ID,
+			})
+		}
+
 		state.Items = append(state.Items, OrderItem{
 			Coffee: Coffee{
 				ID:          item.Coffee.ID,
@@ -187,6 +215,7 @@ func (r resourceOrder) Read(ctx context.Context, req tfsdk.ReadResourceRequest, 
 				Description: types.String{Value: item.Coffee.Description},
 				Price:       types.Number{Value: big.NewFloat(item.Coffee.Price)},
 				Image:       types.String{Value: item.Coffee.Image},
+				Ingredients: ingredients,
 			},
 			Quantity: item.Quantity,
 		})
