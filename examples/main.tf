@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     hashicups = {
-      version = "~> 0.3.1"
+      version = "~> 0.3.2"
       source  = "hashicorp.com/edu/hashicups"
     }
   }
@@ -13,6 +13,8 @@ provider "hashicups" {
   password = "test123"
   host     = "http://localhost:19090"
 }
+
+data "hashicups_coffees" "all" {}
 
 resource "hashicups_order" "edu" {
   items = [{
@@ -31,4 +33,8 @@ resource "hashicups_order" "edu" {
 
 output "edu_order" {
   value = hashicups_order.edu
+}
+
+output "all_coffees" {
+  value = data.hashicups_coffees.all.coffees
 }
