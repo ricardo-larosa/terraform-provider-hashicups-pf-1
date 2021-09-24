@@ -199,14 +199,12 @@ func (r resourceOrder) Read(ctx context.Context, req tfsdk.ReadResourceRequest, 
 	// Map response body to resource schema attribute
 	state.Items = []OrderItem{}
 	for _, item := range order.Items {
-
 		ingredients := []Ingredient{}
 		for _, ingredient := range item.Coffee.Ingredient {
 			ingredients = append(ingredients, Ingredient{
 				ID: ingredient.ID,
 			})
 		}
-
 		state.Items = append(state.Items, OrderItem{
 			Coffee: Coffee{
 				ID:          item.Coffee.ID,
@@ -274,6 +272,12 @@ func (r resourceOrder) Update(ctx context.Context, req tfsdk.UpdateResourceReque
 	// Map response body to resource schema attribute
 	var ois []OrderItem
 	for _, oi := range order.Items {
+		ingredients := []Ingredient{}
+		for _, ingredient := range oi.Coffee.Ingredient {
+			ingredients = append(ingredients, Ingredient{
+				ID: ingredient.ID,
+			})
+		}
 		ois = append(ois, OrderItem{
 			Coffee: Coffee{
 				ID:          oi.Coffee.ID,
@@ -282,6 +286,7 @@ func (r resourceOrder) Update(ctx context.Context, req tfsdk.UpdateResourceReque
 				Description: types.String{Value: oi.Coffee.Description},
 				Price:       types.Number{Value: big.NewFloat(oi.Coffee.Price)},
 				Image:       types.String{Value: oi.Coffee.Image},
+				Ingredients: ingredients,
 			},
 			Quantity: oi.Quantity,
 		})

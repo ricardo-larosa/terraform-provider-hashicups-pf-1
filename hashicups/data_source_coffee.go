@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -12,7 +13,7 @@ import (
 
 type dataSourceCoffeesType struct{}
 
-func (r dataSourceCoffeesType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
+func (d dataSourceCoffeesType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
 		Attributes: map[string]tfsdk.Attribute{
 			"coffees": {
@@ -45,13 +46,14 @@ func (r dataSourceCoffeesType) GetSchema(_ context.Context) (tfsdk.Schema, diag.
 						Computed: true,
 					},
 					"ingredients": {
-						Computed: true,
-						Attributes: tfsdk.ListNestedAttributes(map[string]tfsdk.Attribute{
-							"id": {
-								Type:     types.NumberType,
-								Computed: true,
+						Type: types.ListType{
+							ElemType: types.ObjectType{
+								AttrTypes: map[string]attr.Type{
+									"ingredient_id": types.NumberType,
+								},
 							},
-						}, tfsdk.ListNestedAttributesOptions{}),
+						},
+						Computed: true,
 					},
 				}, tfsdk.ListNestedAttributesOptions{}),
 			},
@@ -59,7 +61,7 @@ func (r dataSourceCoffeesType) GetSchema(_ context.Context) (tfsdk.Schema, diag.
 	}, nil
 }
 
-func (r dataSourceCoffeesType) NewDataSource(ctx context.Context, p tfsdk.Provider) (tfsdk.DataSource, diag.Diagnostics) {
+func (d dataSourceCoffeesType) NewDataSource(ctx context.Context, p tfsdk.Provider) (tfsdk.DataSource, diag.Diagnostics) {
 	return dataSourceCoffees{
 		p: *(p.(*provider)),
 	}, nil
@@ -69,13 +71,13 @@ type dataSourceCoffees struct {
 	p provider
 }
 
-func (r dataSourceCoffees) Read(ctx context.Context, req tfsdk.ReadDataSourceRequest, resp *tfsdk.ReadDataSourceResponse) {
+func (d dataSourceCoffees) Read(ctx context.Context, req tfsdk.ReadDataSourceRequest, resp *tfsdk.ReadDataSourceResponse) {
 	// Declare struct that this function will set to this data source's state
-	var resourceState struct {
-		Coffees []CoffeeIngredients `tfsdk:"coffees"`
+	var state struct {
+		Coffees []Coffee `tfsdk:"coffees"`
 	}
 
-	coffees, err := r.p.client.GetCoffees()
+	coffees, err := d.p.client.GetCoffees()
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error retrieving coffee",
@@ -86,25 +88,21 @@ func (r dataSourceCoffees) Read(ctx context.Context, req tfsdk.ReadDataSourceReq
 
 	// Map response body to resource schema
 	for _, coffee := range coffees {
-		c := CoffeeIngredients{
+		var ingredients []Ingredient
+		for _, ingredient := range coffee.Ingredient {
+			ingredients = append(ingredients, Ingredient{
+				ID: ingredient.ID,
+			})
+		}
+		state.Coffees = append(state.Coffees, Coffee{
 			ID:          coffee.ID,
 			Name:        types.String{Value: coffee.Name},
 			Teaser:      types.String{Value: coffee.Teaser},
 			Description: types.String{Value: coffee.Description},
 			Price:       types.Number{Value: big.NewFloat(coffee.Price)},
 			Image:       types.String{Value: coffee.Image},
-		}
-
-		var ingredients []IngredientID
-		for _, ingredient := range coffee.Ingredient {
-			ingredients = append(ingredients, IngredientID{
-				ID: ingredient.ID,
-			})
-		}
-
-		c.Ingredient = ingredients
-
-		resourceState.Coffees = append(resourceState.Coffees, c)
+			Ingredients: ingredients,
+		})
 	}
 
 	// Sample debug message
@@ -112,10 +110,10 @@ func (r dataSourceCoffees) Read(ctx context.Context, req tfsdk.ReadDataSourceReq
 	// 		`export TF_LOG=DEBUG`
 	// To hide debug message, unset the environment variable
 	// 		`unset TF_LOG`
-	fmt.Fprintf(stderr, "[DEBUG]-Resource State:%+v", resourceState)
+	fmt.Fprintf(stderr, "[DEBUG]-Resource State:%+v", state)
 
 	// Set state
-	diags := resp.State.Set(ctx, &resourceState)
+	diags := resp.State.Set(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
